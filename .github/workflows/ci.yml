@@ -64,7 +64,7 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
-          mvn -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.projectKey=AlinaNaimova_user-service
+          mvn -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.projectKey=AlinaNaimova_user-service -Dsonar.organization=AlinaNaimova
 
   build-docker:
     runs-on: ubuntu-latest
