@@ -23,12 +23,6 @@ public abstract class AbstractIntegrationTest {
                 .withPassword("test");
 
         postgreSQLContainer.start();
-
-        try {
-            Thread.sleep(2000);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
     }
 
     @DynamicPropertySource

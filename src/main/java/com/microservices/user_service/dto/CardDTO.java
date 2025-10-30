@@ -27,6 +27,6 @@ public class CardDTO implements Serializable {
     @NotBlank(message = "Card holder is mandatory")
     private String holder;
 
-    @Pattern(regexp = "(0[1-9]|1[0-2])/[0-9]{2}", message = "Expiration date must be in format MM/YY")
+    @Pattern(regexp = "(0[1-9]|1[0-2])/\\\\d{2}", message = "Expiration date must be in format MM/YY")
     private String expirationDate;
 }

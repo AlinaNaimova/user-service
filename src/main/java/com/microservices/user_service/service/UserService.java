@@ -61,10 +61,11 @@ public class UserService {
     public UserDTO update(Long id, UserDTO userDTO) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("User", id));
-        if (userDTO.getEmail() != null && !user.getEmail().equals(userDTO.getEmail())) {
-            if (userRepository.findByEmail(userDTO.getEmail()).isPresent()) {
-                throw new DuplicateResourceException("User", "email", userDTO.getEmail());
-            }
+        if (userDTO.getEmail() != null &&
+                !user.getEmail().equals(userDTO.getEmail()) &&
+                userRepository.findByEmail(userDTO.getEmail()).isPresent()) {
+
+            throw new DuplicateResourceException("User", "email", userDTO.getEmail());
         }
         user.setName(userDTO.getName());
         user.setSurname(userDTO.getSurname());
