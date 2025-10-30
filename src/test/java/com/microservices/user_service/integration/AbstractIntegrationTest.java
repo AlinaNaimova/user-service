@@ -23,13 +23,6 @@ public abstract class AbstractIntegrationTest {
                 .withPassword("test");
 
         postgreSQLContainer.start();
-
-        // Temporary sleep to ensure PostgreSQL is fully ready - required for CI environment
-        try {
-            Thread.sleep(2000);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
     }
 
     @DynamicPropertySource
