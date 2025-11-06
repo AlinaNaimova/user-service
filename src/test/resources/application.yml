@@ -1,0 +1,28 @@
+spring:
+  liquibase:
+    enabled: false
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+  datasource:
+    hikari:
+      maximum-pool-size: 2
+      minimum-idle: 1
+      connection-timeout: 60000
+      max-lifetime: 60000
+      idle-timeout: 60000
+      leak-detection-threshold: 60000
+
+management:
+  observations:
+    annotations:
+      enabled: false
+
+logging:
+  level:
+    org.hibernate.SQL: DEBUG
+    com.zaxxer.hikari: TRACE

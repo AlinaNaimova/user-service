@@ -1,0 +1,12 @@
+*.iml
+/target/
+/logs/
+/LOGS_IS_UNDEFINED/
+.idea/
+/csv-file.csv
+/.vscode/
+build.log
+nbactions.xml
+
+!.helm/**
+!.jenkins/**
