@@ -92,6 +92,6 @@ jobs:
       - name: Build and push Docker image
         run: |
           mvn clean package -DskipTests
-          IMAGE=ghcr.io/${{ github.actor }}/user-service:latest
+          IMAGE=ghcr.io/alinanaimova/user-service:latest
           docker build -t $IMAGE .
           docker push $IMAGE
