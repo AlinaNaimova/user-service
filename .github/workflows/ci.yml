@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [ "main" ]
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   build-test-analyze:
     runs-on: ubuntu-latest
@@ -88,6 +92,6 @@ jobs:
       - name: Build and push Docker image
         run: |
           mvn clean package -DskipTests
-          IMAGE=ghcr.io/alinanaimova/user-service:latest
+          IMAGE=ghcr.io/${{ github.actor }}/user-service:latest
           docker build -t $IMAGE .
           docker push $IMAGE
