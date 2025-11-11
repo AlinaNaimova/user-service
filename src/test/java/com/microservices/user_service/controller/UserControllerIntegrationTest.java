@@ -17,6 +17,7 @@ import java.time.LocalDate;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -39,9 +40,10 @@ class UserControllerIntegrationTest extends AbstractIntegrationTest {
     @BeforeEach
     void setUp() {
         this.mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
-
         objectMapper.registerModule(new JavaTimeModule());
+
         userDTO = new UserDTO();
+        userDTO.setId(100L);
         userDTO.setName("Tom");
         userDTO.setSurname("Ripley");
         userDTO.setEmail("tom.ripley@example.com");
@@ -57,7 +59,7 @@ class UserControllerIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.name", is(userDTO.getName())))
                 .andExpect(jsonPath("$.surname", is(userDTO.getSurname())))
                 .andExpect(jsonPath("$.email", is(userDTO.getEmail())))
-                .andExpect(jsonPath("$.id", notNullValue()));
+                .andExpect(jsonPath("$.id", is(userDTO.getId().intValue())));
     }
 
     @Test
@@ -74,10 +76,37 @@ class UserControllerIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void getCurrentUserShouldReturnUser() throws Exception {
+        mockMvc.perform(get("/api/users/me")
+                        .with(user("test.user@example.com")
+                                .roles("USER") // ✅ ТОЛЬКО roles()
+                                .password("password")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name", is("Test")))
+                .andExpect(jsonPath("$.surname", is("User")))
+                .andExpect(jsonPath("$.email", is("test.user@example.com")));
+    }
+
+    @Test
+    void getCurrentUserWithCardsShouldReturnUserWithCards() throws Exception {
+        mockMvc.perform(get("/api/users/me/with-cards")
+                        .with(user("test.user@example.com")
+                                .roles("USER")
+                                .password("password")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name", is("Test")))
+                .andExpect(jsonPath("$.cards", notNullValue()))
+                .andExpect(jsonPath("$.cards.length()", is(2)));
+    }
+
+    @Test
     void getUserByIdShouldReturnUser() throws Exception {
         Long userId = 1L;
 
-        mockMvc.perform(get("/api/users/{id}", userId))
+        mockMvc.perform(get("/api/users/{id}", userId)
+                        .with(user("test.user@example.com")
+                                .roles("USER")
+                                .password("password")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id", is(userId.intValue())))
                 .andExpect(jsonPath("$.name", is("Test")))
@@ -89,15 +118,26 @@ class UserControllerIntegrationTest extends AbstractIntegrationTest {
     void getUserByIdWithNonExistingIdShouldReturnNotFound() throws Exception {
         Long nonExistingId = 999L;
 
-        mockMvc.perform(get("/api/users/{id}", nonExistingId))
+        mockMvc.perform(get("/api/users/{id}", nonExistingId)
+                        .with(user("admin@example.com").roles("ADMIN")))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void getUserByIdWithForbiddenAccessShouldReturnForbidden() throws Exception {
+        Long userId = 1L;
+
+        mockMvc.perform(get("/api/users/{id}", userId)
+                        .with(user("other@example.com").roles("USER")))
+                .andExpect(status().isForbidden());
     }
 
     @Test
     void getUserWithCardsByIdShouldReturnUserWithCards() throws Exception {
         Long userId = 1L;
 
-        mockMvc.perform(get("/api/users/{id}/with-cards", userId))
+        mockMvc.perform(get("/api/users/{id}/with-cards", userId)
+                        .with(user("test.user@example.com").roles("USER")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id", is(userId.intValue())))
                 .andExpect(jsonPath("$.name", is("Test")))
@@ -109,7 +149,8 @@ class UserControllerIntegrationTest extends AbstractIntegrationTest {
     void getAllUsersShouldReturnPaginatedUsers() throws Exception {
         mockMvc.perform(get("/api/users")
                         .param("page", "0")
-                        .param("size", "10"))
+                        .param("size", "10")
+                        .with(user("admin@example.com").roles("ADMIN")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content", notNullValue()))
                 .andExpect(jsonPath("$.content.length()", is(2)))
@@ -117,10 +158,20 @@ class UserControllerIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void getAllUsersWithUserRoleShouldReturnForbidden() throws Exception {
+        mockMvc.perform(get("/api/users")
+                        .param("page", "0")
+                        .param("size", "10")
+                        .with(user("user@example.com").roles("USER")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void getUserByEmailShouldReturnUser() throws Exception {
         String email = "test.user@example.com";
 
-        mockMvc.perform(get("/api/users/email/{email}", email))
+        mockMvc.perform(get("/api/users/email/{email}", email)
+                        .with(user("admin@example.com").roles("ADMIN")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.email", is(email)));
     }
@@ -129,7 +180,8 @@ class UserControllerIntegrationTest extends AbstractIntegrationTest {
     void getUserByEmailWithNonExistingEmailShouldReturnNotFound() throws Exception {
         String nonExistingEmail = "nonexisting@example.com";
 
-        mockMvc.perform(get("/api/users/email/{email}", nonExistingEmail))
+        mockMvc.perform(get("/api/users/email/{email}", nonExistingEmail)
+                        .with(user("admin@example.com").roles("ADMIN")))
                 .andExpect(status().isNotFound());
     }
 
@@ -144,7 +196,8 @@ class UserControllerIntegrationTest extends AbstractIntegrationTest {
 
         mockMvc.perform(put("/api/users/{id}", userId)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(updatedUser)))
+                        .content(objectMapper.writeValueAsString(updatedUser))
+                        .with(user("test.user@example.com").roles("USER")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name", is("Updated")))
                 .andExpect(jsonPath("$.surname", is("Name")))
@@ -155,16 +208,19 @@ class UserControllerIntegrationTest extends AbstractIntegrationTest {
     void deleteUserShouldReturnNoContent() throws Exception {
         Long userId = 1L;
 
-        mockMvc.perform(delete("/api/users/{id}", userId))
+        mockMvc.perform(delete("/api/users/{id}", userId)
+                        .with(user("test.user@example.com").roles("USER")))
                 .andExpect(status().isNoContent());
 
-        mockMvc.perform(get("/api/users/{id}", userId))
+        mockMvc.perform(get("/api/users/{id}", userId)
+                        .with(user("admin@example.com").roles("ADMIN")))
                 .andExpect(status().isNotFound());
     }
 
     @Test
     void createUserWithDuplicateEmailShouldReturnConflict() throws Exception {
         UserDTO duplicateUser = new UserDTO();
+        duplicateUser.setId(101L);
         duplicateUser.setName("Another");
         duplicateUser.setSurname("User");
         duplicateUser.setEmail("test.user@example.com");
@@ -173,6 +229,6 @@ class UserControllerIntegrationTest extends AbstractIntegrationTest {
         mockMvc.perform(post("/api/users")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(duplicateUser)))
-                .andExpect(status().isConflict()); // Меняем с 400 на 409
+                .andExpect(status().isConflict());
     }
 }

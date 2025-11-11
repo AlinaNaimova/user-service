@@ -8,6 +8,8 @@ import com.microservices.user_service.mapper.UserMapper;
 import com.microservices.user_service.model.User;
 import com.microservices.user_service.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
@@ -15,11 +17,35 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Optional;
+
 @Service
 @RequiredArgsConstructor
 public class UserService {
+    private static final Logger log = LoggerFactory.getLogger(UserService.class);
+
     private final UserRepository userRepository;
     private final UserMapper userMapper;
+
+    @Cacheable(value = "users", key = "#id")
+    @Transactional
+    public UserDTO getOrCreateUser(Long id, String email) {
+        Optional<User> existingUser = userRepository.findById(id);
+
+        if (existingUser.isPresent()) {
+            log.debug("User found: userId={}, email={}", id, email);
+            return userMapper.toDTO(existingUser.get());
+        }
+
+        UserDTO newUserDTO = new UserDTO();
+        newUserDTO.setId(id);
+        newUserDTO.setEmail(email);
+        newUserDTO.setName("New");
+        newUserDTO.setSurname("User");
+
+        log.info("Creating new user profile: userId={}, email={}", id, email);
+        return create(newUserDTO);
+    }
 
     @Cacheable(value = "users", key = "#id")
     @Transactional(readOnly = true)
@@ -52,6 +78,7 @@ public class UserService {
             throw new DuplicateResourceException("User", "email", userDTO.getEmail());
         }
         User user = userMapper.toEntity(userDTO);
+        user.setId(userDTO.getId());
         user = userRepository.save(user);
         return userMapper.toDTO(user);
     }

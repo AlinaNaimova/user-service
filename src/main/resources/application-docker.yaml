@@ -20,6 +20,14 @@ spring:
 server:
   port: 8080
 
+jwt:
+  secret: "mySuperSecretKeyThatIsAtLeast32BytesLongForJWT123!"
+
+app:
+  user-service:
+    url: "http://user-service:8080/api/users"
+
 logging:
   level:
     com.example.userservice: INFO
+

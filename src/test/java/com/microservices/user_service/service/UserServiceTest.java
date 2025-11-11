@@ -81,6 +81,45 @@ class UserServiceTest {
     }
 
     @Test
+    void getOrCreateUserWhenUserExistsExpectReturnUserDTO() {
+        User existingUser = createUser(1L, "Kira", "Chang", "kira.chang@example.com",
+                LocalDate.of(1990, 1, 1));
+        UserDTO userDTO = createUserDTO(1L, "Kira", "Chang", "kira.chang@example.com",
+                LocalDate.of(1990, 1, 1));
+
+        when(userRepository.findById(1L)).thenReturn(Optional.of(existingUser));
+        when(userMapper.toDTO(existingUser)).thenReturn(userDTO);
+
+        UserDTO result = userService.getOrCreateUser(1L, "kira.chang@example.com");
+
+        assertThat(result).isNotNull();
+        assertThat(result.getId()).isEqualTo(1L);
+        verify(userRepository).findById(1L);
+        verify(userMapper).toDTO(existingUser);
+    }
+
+    @Test
+    void getOrCreateUserWhenUserNotExistsExpectCreateAndReturnUserDTO() {
+        UserDTO newUserDTO = createUserDTO(100L, "New", "User", "new.user@example.com", null);
+        User newUser = createUser(100L, "New", "User", "new.user@example.com", null);
+        User savedUser = createUser(100L, "New", "User", "new.user@example.com", null);
+
+        when(userRepository.findById(100L)).thenReturn(Optional.empty());
+        when(userRepository.findByEmailNative("new.user@example.com")).thenReturn(Optional.empty());
+        when(userMapper.toEntity(any(UserDTO.class))).thenReturn(newUser);
+        when(userRepository.save(newUser)).thenReturn(savedUser);
+        when(userMapper.toDTO(savedUser)).thenReturn(newUserDTO);
+
+        UserDTO result = userService.getOrCreateUser(100L, "new.user@example.com");
+
+        assertThat(result).isNotNull();
+        assertThat(result.getId()).isEqualTo(100L);
+        assertThat(result.getName()).isEqualTo("New");
+        verify(userRepository).findById(100L);
+        verify(userRepository).save(newUser);
+    }
+
+    @Test
     void getByIdWhenUserExistsExpectReturnUserDTO() {
         User user = createUser(1L, "Kira", "Chang", "kira.chang@example.com",
                 LocalDate.of(1990, 1, 1));
@@ -136,7 +175,6 @@ class UserServiceTest {
         verify(userMapper).toDTOWithCards(user);
     }
 
-
     @Test
     void getByEmailWhenUserExistsExpectReturnUserDTO() {
         User user = createUser(1L, "Kira", "Chang", "kira.chang@example.com",
@@ -154,7 +192,6 @@ class UserServiceTest {
         verify(userRepository).findByEmail("kira.chang@example.com");
         verify(userMapper).toDTO(user);
     }
-
 
     @Test
     void createWithValidUserExpectSaveAndReturnUserDTO() {
@@ -254,7 +291,6 @@ class UserServiceTest {
         verify(userRepository, never()).save(any());
         verify(userRepository, never()).findByEmail(anyString());
     }
-
 
     @Test
     void deleteByIdWhenUserExistsExpectDeleteUser() {

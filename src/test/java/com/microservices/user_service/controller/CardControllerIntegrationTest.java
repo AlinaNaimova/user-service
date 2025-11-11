@@ -14,6 +14,7 @@ import org.springframework.web.context.WebApplicationContext;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.notNullValue;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -47,7 +48,10 @@ class CardControllerIntegrationTest extends AbstractIntegrationTest {
     void createCardShouldReturnCreatedCard() throws Exception {
         mockMvc.perform(post("/api/card_info")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(cardDTO)))
+                        .content(objectMapper.writeValueAsString(cardDTO))
+                        .with(user("test.user@example.com")
+                                .roles("USER") // ✅ ТОЛЬКО roles()
+                                .password("password")))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.number", is(cardDTO.getNumber())))
                 .andExpect(jsonPath("$.holder", is(cardDTO.getHolder())))
@@ -56,14 +60,31 @@ class CardControllerIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void createCardForOtherUserShouldReturnForbidden() throws Exception {
+        CardDTO otherUserCard = new CardDTO();
+        otherUserCard.setNumber("9999888877776666");
+        otherUserCard.setHolder("Other User");
+        otherUserCard.setExpirationDate("12/25");
+        otherUserCard.setUserId(2L);
+
+        mockMvc.perform(post("/api/card_info")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(otherUserCard))
+                        .with(user("test.user@example.com").roles("USER")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void createCardWithInvalidDataShouldReturnBadRequest() throws Exception {
         CardDTO invalidCard = new CardDTO();
         invalidCard.setNumber("123");
         invalidCard.setExpirationDate("invalid");
+        invalidCard.setUserId(1L);
 
         mockMvc.perform(post("/api/card_info")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(invalidCard)))
+                        .content(objectMapper.writeValueAsString(invalidCard))
+                        .with(user("test.user@example.com").roles("USER")))
                 .andExpect(status().isBadRequest());
     }
 
@@ -71,7 +92,8 @@ class CardControllerIntegrationTest extends AbstractIntegrationTest {
     void getCardByIdShouldReturnCard() throws Exception {
         Long cardId = 1L;
 
-        mockMvc.perform(get("/api/card_info/{id}", cardId))
+        mockMvc.perform(get("/api/card_info/{id}", cardId)
+                        .with(user("test.user@example.com").roles("USER")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id", is(cardId.intValue())))
                 .andExpect(jsonPath("$.number", is("1111222233334444")))
@@ -80,10 +102,20 @@ class CardControllerIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void getCardByIdWithForbiddenAccessShouldReturnForbidden() throws Exception {
+        Long cardId = 1L;
+
+        mockMvc.perform(get("/api/card_info/{id}", cardId)
+                        .with(user("second.user@example.com").roles("USER")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void getCardByIdWithNonExistingIdShouldReturnNotFound() throws Exception {
         Long nonExistingId = 999L;
 
-        mockMvc.perform(get("/api/card_info/{id}", nonExistingId))
+        mockMvc.perform(get("/api/card_info/{id}", nonExistingId)
+                        .with(user("admin@example.com").roles("ADMIN")))
                 .andExpect(status().isNotFound());
     }
 
@@ -91,7 +123,8 @@ class CardControllerIntegrationTest extends AbstractIntegrationTest {
     void getAllCardsShouldReturnPaginatedCards() throws Exception {
         mockMvc.perform(get("/api/card_info")
                         .param("page", "0")
-                        .param("size", "10"))
+                        .param("size", "10")
+                        .with(user("admin@example.com").roles("ADMIN")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content", notNullValue()))
                 .andExpect(jsonPath("$.content.length()", is(3)))
@@ -99,13 +132,24 @@ class CardControllerIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void getAllCardsWithUserRoleShouldReturnForbidden() throws Exception {
+        mockMvc.perform(get("/api/card_info")
+                        .param("page", "0")
+                        .param("size", "10")
+                        .with(user("test.user@example.com").roles("USER")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void deleteCardShouldReturnNoContent() throws Exception {
         Long cardId = 1L;
 
-        mockMvc.perform(delete("/api/card_info/{id}", cardId))
+        mockMvc.perform(delete("/api/card_info/{id}", cardId)
+                        .with(user("test.user@example.com").roles("USER")))
                 .andExpect(status().isNoContent());
 
-        mockMvc.perform(get("/api/card_info/{id}", cardId))
+        mockMvc.perform(get("/api/card_info/{id}", cardId)
+                        .with(user("admin@example.com").roles("ADMIN")))
                 .andExpect(status().isNotFound());
     }
 
@@ -119,7 +163,8 @@ class CardControllerIntegrationTest extends AbstractIntegrationTest {
 
         mockMvc.perform(post("/api/card_info")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(cardForNonExistingUser)))
+                        .content(objectMapper.writeValueAsString(cardForNonExistingUser))
+                        .with(user("admin@example.com").roles("ADMIN")))
                 .andExpect(status().isNotFound());
     }
 
@@ -133,7 +178,8 @@ class CardControllerIntegrationTest extends AbstractIntegrationTest {
 
         mockMvc.perform(post("/api/card_info")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(invalidCard)))
+                        .content(objectMapper.writeValueAsString(invalidCard))
+                        .with(user("test.user@example.com").roles("USER")))
                 .andExpect(status().isBadRequest());
     }
 }

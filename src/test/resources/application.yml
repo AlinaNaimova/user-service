@@ -26,3 +26,6 @@ logging:
   level:
     org.hibernate.SQL: DEBUG
     com.zaxxer.hikari: TRACE
+
+jwt:
+  secret: "mySuperSecretKeyThatIsAtLeast32BytesLongForJWT123!"
