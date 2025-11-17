@@ -3,6 +3,7 @@ package com.microservices.user_service.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.microservices.user_service.dto.CardDTO;
 import com.microservices.user_service.integration.AbstractIntegrationTest;
+import com.microservices.user_service.util.TestSecurityUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,6 +36,8 @@ class CardControllerIntegrationTest extends AbstractIntegrationTest {
     @BeforeEach
     void setUp() {
         this.mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
+
+        TestSecurityUtils.mockAdminUser();
 
         cardDTO = new CardDTO();
         cardDTO.setNumber("1234567812345678");
