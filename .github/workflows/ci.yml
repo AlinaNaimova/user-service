@@ -29,6 +29,16 @@ jobs:
           - 6379:6379
         options: --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
 
+      keycloak:
+        image: quay.io/keycloak/keycloak:24.0.1
+        env:
+          KEYCLOAK_ADMIN: admin
+          KEYCLOAK_ADMIN_PASSWORD: admin
+          KC_HTTP_ENABLED: true
+        ports:
+          - 8080:8080
+        options: --health-cmd="curl -f http://localhost:8080/realms/master || exit 1" --health-interval 10s --health-timeout 5s --health-retries 10
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -62,6 +72,7 @@ jobs:
           SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/userdb
           SPRING_DATASOURCE_USERNAME: user
           SPRING_DATASOURCE_PASSWORD: password
+          SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: http://localhost:8080/realms/app-realm
         run: mvn -B clean verify
 
       - name: SonarCloud Code Analysis

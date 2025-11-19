@@ -3,7 +3,6 @@ package com.microservices.user_service.controller;
 import com.microservices.user_service.dto.UserDTO;
 import com.microservices.user_service.dto.UserDTOWithCards;
 import com.microservices.user_service.service.UserService;
-import com.microservices.user_service.util.SecurityUtils;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -37,7 +36,7 @@ public class UserController {
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN')") // ТОЛЬКО getAllUsers для админов!
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Page<UserDTO>> getAllUsers(Pageable pageable) {
         Page<UserDTO> users = userService.getAllUsers(pageable);
         return ResponseEntity.ok(users);

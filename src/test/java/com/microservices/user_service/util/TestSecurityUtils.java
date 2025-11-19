@@ -24,15 +24,11 @@ public class TestSecurityUtils {
     }
 
     public static void mockAdminUser() {
-        mockAuthentication("admin@test.com", "ROLE_ADMIN", 1L);
-    }
-
-    public static void mockRegularUser(Long userId) {
-        mockAuthentication("user@test.com", "ROLE_USER", userId);
+        mockAuthentication("test.user@example.com", "ROLE_ADMIN", 1L);
     }
 
     public static void mockRegularUser() {
-        mockAuthentication("user@test.com", "ROLE_USER", 2L);
+        mockAuthentication("jane.smith@example.com", "ROLE_USER", 2L);
     }
 
     public static void clearAuthentication() {

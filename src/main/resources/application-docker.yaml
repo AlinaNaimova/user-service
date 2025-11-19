@@ -16,6 +16,11 @@ spring:
       port: 6379
   liquibase:
     change-log: classpath:db/changelog/schema-changelog.yaml
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://keycloak:8080/realms/app-realm
 
 server:
   port: 8080

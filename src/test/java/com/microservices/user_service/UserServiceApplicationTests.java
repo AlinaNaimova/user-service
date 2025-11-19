@@ -1,23 +1,27 @@
 package com.microservices.user_service;
 
-import com.microservices.user_service.service.TokenValidationService;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.ActiveProfiles;
 
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.when;
-
-@SpringBootTest
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@ActiveProfiles("test")
 class UserServiceApplicationTests {
-
-    @MockitoBean
-    private TokenValidationService tokenValidationService;
 
     @Test
     void contextLoads() {
-        when(tokenValidationService.validateToken(anyString()))
-                .thenReturn(TokenValidationService.TokenValidationResult.valid("test@test.com", "ROLE_ADMIN", 1L));
-        when(tokenValidationService.isAdmin(anyString())).thenReturn(true);
+        // Просто проверяем что контекст Spring загружается
+        // Вся аутентификация теперь через Keycloak
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    public void testWithAdminUser() {
+    }
+
+    @Test
+    @WithMockUser(roles = "USER")
+    public void testWithUserRole() {
     }
 }

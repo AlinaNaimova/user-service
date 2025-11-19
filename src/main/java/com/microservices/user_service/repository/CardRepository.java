@@ -7,19 +7,17 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import java.util.List;
+
 import java.util.Optional;
 
 public interface CardRepository extends JpaRepository<Card, Long> {
 
-    List<Card> findByUserId(Long userId);
-    Optional<Card> findByNumber(String number);
-
-    @Query("SELECT c FROM Card c JOIN c.user u WHERE u.email = :email")
-    List<Card> findCardsByUserEmail(@Param("email") String email);
+    @Query("SELECT c FROM Card c WHERE c.user.id = :userId")
+    Page<Card> findByUserId(@Param("userId") Long userId, Pageable pageable);
 
     @Query(value = "SELECT * FROM card_info WHERE number = :number", nativeQuery = true)
     Optional<Card> findByNumberNative(@Param("number") String number);
 
-    Page<Card> findAll(Pageable pageable);
+    @Query("SELECT c FROM Card c JOIN FETCH c.user WHERE c.id = :id")
+    Optional<Card> findByIdWithUser(@Param("id") Long id);
 }
