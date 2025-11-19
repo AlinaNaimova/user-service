@@ -19,7 +19,10 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-                .csrf(AbstractHttpConfigurer::disable)
+                //explanation for sonar
+                // CSRF protection is disabled because this is a stateless REST API
+                // using JWT tokens in Authorization header, not cookie-based sessions
+                .csrf(AbstractHttpConfigurer::disable) // Safe for stateless JWT-based APIs
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authz -> authz
                         .requestMatchers("/api/users").permitAll()
