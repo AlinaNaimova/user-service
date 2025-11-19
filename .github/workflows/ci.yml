@@ -30,21 +30,6 @@ jobs:
           - 6379:6379
         options: --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
 
-      keycloak:
-        image: quay.io/keycloak/keycloak:23.0.7
-        env:
-          KEYCLOAK_ADMIN: admin
-          KEYCLOAK_ADMIN_PASSWORD: admin
-        ports:
-          - 8080:8080
-        options: >-
-          --health-cmd="curl -f http://localhost:8080/realms/master || exit 1"
-          --health-interval 20s
-          --health-timeout 10s
-          --health-retries 15
-          --health-start-period 60s
-        args: start-dev --http-enabled=true
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -57,11 +42,24 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Wait for Keycloak to be ready
+      - name: Start Keycloak
         run: |
+          docker run -d \
+            --name keycloak \
+            -p 8080:8080 \
+            -e KEYCLOAK_ADMIN=admin \
+            -e KEYCLOAK_ADMIN_PASSWORD=admin \
+            quay.io/keycloak/keycloak:23.0.7 start-dev --http-enabled=true
+          
           echo "Waiting for Keycloak to start..."
-          timeout 300 bash -c 'until curl -f http://localhost:8080/realms/master > /dev/null 2>&1; do echo "Waiting..."; sleep 10; done'
-          echo "Keycloak is ready!"
+          for i in {1..30}; do
+            if curl -s http://localhost:8080/realms/master > /dev/null 2>&1; then
+              echo "Keycloak is ready!"
+              break
+            fi
+            echo "Waiting for Keycloak... attempt $i"
+            sleep 10
+          done
 
       - name: Cache SonarQube packages
         uses: actions/cache@v4
@@ -92,6 +90,12 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
           mvn -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.projectKey=AlinaNaimova_user-service
+
+      - name: Stop Keycloak
+        if: always()
+        run: |
+          docker stop keycloak || true
+          docker rm keycloak || true
 
   build-docker:
     runs-on: ubuntu-latest
