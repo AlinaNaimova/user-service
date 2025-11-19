@@ -4,10 +4,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.microservices.user_service.dto.UserDTO;
 import com.microservices.user_service.integration.AbstractIntegrationTest;
+import com.microservices.user_service.util.TestSecurityUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -24,6 +26,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Sql(scripts = "classpath:sql_scripts/insert-users.sql", executionPhase = Sql.ExecutionPhase.BEFORE_TEST_METHOD)
 @Sql(scripts = "classpath:sql_scripts/insert-cards.sql", executionPhase = Sql.ExecutionPhase.BEFORE_TEST_METHOD)
 @Sql(scripts = "classpath:sql_scripts/cleanup.sql", executionPhase = Sql.ExecutionPhase.AFTER_TEST_METHOD)
+@ActiveProfiles("test")
 class UserControllerIntegrationTest extends AbstractIntegrationTest {
 
     private MockMvc mockMvc;
@@ -39,6 +42,8 @@ class UserControllerIntegrationTest extends AbstractIntegrationTest {
     @BeforeEach
     void setUp() {
         this.mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
+
+        TestSecurityUtils.mockAdminUser();
 
         objectMapper.registerModule(new JavaTimeModule());
         userDTO = new UserDTO();
@@ -173,6 +178,6 @@ class UserControllerIntegrationTest extends AbstractIntegrationTest {
         mockMvc.perform(post("/api/users")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(duplicateUser)))
-                .andExpect(status().isConflict()); // Меняем с 400 на 409
+                .andExpect(status().isConflict());
     }
 }

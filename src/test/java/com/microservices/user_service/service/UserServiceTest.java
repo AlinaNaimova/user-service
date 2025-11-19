@@ -8,6 +8,10 @@ import com.microservices.user_service.exception.NotFoundException;
 import com.microservices.user_service.mapper.UserMapper;
 import com.microservices.user_service.model.User;
 import com.microservices.user_service.repository.UserRepository;
+import com.microservices.user_service.util.SecurityUtils;
+import com.microservices.user_service.util.TestSecurityUtils;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -17,6 +21,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.AccessDeniedException;
 
 import java.time.LocalDate;
 import java.util.Arrays;
@@ -41,8 +46,21 @@ class UserServiceTest {
     @Mock
     private UserMapper userMapper;
 
+    @Mock
+    private SecurityUtils securityUtils;
+
     @InjectMocks
     private UserService userService;
+
+    @BeforeEach
+    void setUp() {
+        TestSecurityUtils.mockAdminUser();
+    }
+
+    @AfterEach
+    void tearDown() {
+        TestSecurityUtils.clearAuthentication();
+    }
 
     private User createUser(Long id, String name, String surname, String email, LocalDate birthDate) {
         User user = new User();
@@ -87,6 +105,7 @@ class UserServiceTest {
         UserDTO userDTO = createUserDTO(1L, "Kira", "Chang", "kira.chang@example.com",
                 LocalDate.of(1990, 1, 1));
 
+        when(securityUtils.hasAccessToUser(1L)).thenReturn(true);
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(userMapper.toDTO(user)).thenReturn(userDTO);
 
@@ -94,18 +113,32 @@ class UserServiceTest {
 
         assertThat(testUser).isNotNull();
         assertThat(testUser.getId()).isEqualTo(1L);
+        verify(securityUtils).hasAccessToUser(1L);
         verify(userRepository).findById(1L);
         verify(userMapper).toDTO(user);
     }
 
     @Test
+    void getByIdWhenNoAccessExpectThrowAccessDeniedException() {
+        when(securityUtils.hasAccessToUser(2L)).thenReturn(false);
+
+        assertThatThrownBy(() -> userService.getById(2L))
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessage("Access denied");
+
+        verify(userRepository, never()).findById(any());
+    }
+
+    @Test
     void getByIdWhenUserNotExistsExpectThrowNotFoundException() {
+        when(securityUtils.hasAccessToUser(134L)).thenReturn(true);
         when(userRepository.findById(134L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> userService.getById(134L))
                 .isInstanceOf(NotFoundException.class)
                 .hasMessage("User not found with id: 134");
 
+        verify(securityUtils).hasAccessToUser(134L);
         verify(userRepository).findById(134L);
         verify(userMapper, never()).toDTO(any());
     }
@@ -167,7 +200,7 @@ class UserServiceTest {
         UserDTO expectedDTO = createUserDTO(2L, "Molly", "Bing", "molly.bing@example.com",
                 LocalDate.of(1990, 5, 15));
 
-        when(userRepository.findByEmailNative("molly.bing@example.com")).thenReturn(Optional.empty());
+        when(userRepository.findByEmail("molly.bing@example.com")).thenReturn(Optional.empty());
         when(userMapper.toEntity(createUserDTO)).thenReturn(newUser);
         when(userRepository.save(newUser)).thenReturn(savedUser);
         when(userMapper.toDTO(savedUser)).thenReturn(expectedDTO);
@@ -176,7 +209,7 @@ class UserServiceTest {
 
         assertThat(testUser).isNotNull();
         assertThat(testUser.getId()).isEqualTo(2L);
-        verify(userRepository).findByEmailNative("molly.bing@example.com");
+        verify(userRepository).findByEmail("molly.bing@example.com");
         verify(userRepository).save(newUser);
         verify(userMapper).toDTO(savedUser);
     }
@@ -188,13 +221,13 @@ class UserServiceTest {
         User existingUser = createUser(1L, "Kira", "Chang", "kira.chang@example.com",
                 LocalDate.of(1990, 1, 1));
 
-        when(userRepository.findByEmailNative("kira.chang@example.com")).thenReturn(Optional.of(existingUser));
+        when(userRepository.findByEmail("kira.chang@example.com")).thenReturn(Optional.of(existingUser));
 
         assertThatThrownBy(() -> userService.create(createUserDTO))
                 .isInstanceOf(DuplicateResourceException.class)
                 .hasMessage("User already exists with email: kira.chang@example.com");
 
-        verify(userRepository).findByEmailNative("kira.chang@example.com");
+        verify(userRepository).findByEmail("kira.chang@example.com");
         verify(userMapper, never()).toEntity(any());
         verify(userRepository, never()).save(any());
     }
@@ -208,6 +241,8 @@ class UserServiceTest {
         UserDTO expectedResult = createUserDTO(1L, "Kira Updated", "Chang Updated", "kira.chang@example.com",
                 LocalDate.of(1995, 6, 15));
 
+        when(securityUtils.hasAccessToUser(1L)).thenReturn(true);
+
         when(userRepository.findById(1L)).thenReturn(Optional.of(existingUser));
         when(userRepository.save(existingUser)).thenReturn(existingUser);
         when(userMapper.toDTO(existingUser)).thenReturn(expectedResult);
@@ -217,9 +252,24 @@ class UserServiceTest {
         assertThat(testUser).isNotNull();
         assertThat(testUser.getName()).isEqualTo("Kira Updated");
         assertThat(testUser.getEmail()).isEqualTo("kira.chang@example.com");
+        verify(securityUtils).hasAccessToUser(1L);
         verify(userRepository).findById(1L);
         verify(userRepository, never()).findByEmail(anyString());
         verify(userRepository).save(existingUser);
+    }
+
+    @Test
+    void updateWhenNoAccessExpectThrowAccessDeniedException() {
+        UserDTO updateData = createUserDTO(null, "Kira", "Chang", "kira@example.com",
+                LocalDate.of(1990, 1, 1));
+
+        when(securityUtils.hasAccessToUser(2L)).thenReturn(false);
+
+        assertThatThrownBy(() -> userService.update(2L, updateData))
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessage("You can only update your own profile");
+
+        verify(userRepository, never()).findById(any());
     }
 
     @Test
@@ -231,6 +281,7 @@ class UserServiceTest {
         User conflictingUser = createUser(2L, "Other", "User", "taken@example.com",
                 LocalDate.of(1990, 1, 1));
 
+        when(securityUtils.hasAccessToUser(1L)).thenReturn(true);
         when(userRepository.findById(1L)).thenReturn(Optional.of(existingUser));
         when(userRepository.findByEmail("taken@example.com")).thenReturn(Optional.of(conflictingUser));
 
@@ -238,6 +289,7 @@ class UserServiceTest {
                 .isInstanceOf(DuplicateResourceException.class)
                 .hasMessage("User already exists with email: taken@example.com");
 
+        verify(securityUtils).hasAccessToUser(1L);
         verify(userRepository, never()).save(any());
     }
 
@@ -245,12 +297,14 @@ class UserServiceTest {
     void updateWhenUserNotExistsExpectThrowNotFoundException() {
         UserDTO updateData = createUserDTO(null, "Kira", "Chang", "kira@example.com",
                 LocalDate.of(1990, 1, 1));
+        when(securityUtils.hasAccessToUser(999L)).thenReturn(true);
         when(userRepository.findById(999L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> userService.update(999L, updateData))
                 .isInstanceOf(NotFoundException.class)
                 .hasMessage("User not found with id: 999");
 
+        verify(securityUtils).hasAccessToUser(999L);
         verify(userRepository, never()).save(any());
         verify(userRepository, never()).findByEmail(anyString());
     }
@@ -258,22 +312,37 @@ class UserServiceTest {
 
     @Test
     void deleteByIdWhenUserExistsExpectDeleteUser() {
+        when(securityUtils.hasAccessToUser(1L)).thenReturn(true);
         when(userRepository.existsById(1L)).thenReturn(true);
 
         userService.deleteById(1L);
 
+        verify(securityUtils).hasAccessToUser(1L);
         verify(userRepository).existsById(1L);
         verify(userRepository).deleteById(1L);
     }
 
     @Test
+    void deleteByIdWhenNoAccessExpectThrowAccessDeniedException() {
+        when(securityUtils.hasAccessToUser(2L)).thenReturn(false);
+
+        assertThatThrownBy(() -> userService.deleteById(2L))
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessage("You can only delete your own profile");
+
+        verify(userRepository, never()).existsById(any());
+    }
+
+    @Test
     void deleteByIdWhenUserNotExistsExpectThrowNotFoundException() {
+        when(securityUtils.hasAccessToUser(999L)).thenReturn(true);
         when(userRepository.existsById(999L)).thenReturn(false);
 
         assertThatThrownBy(() -> userService.deleteById(999L))
                 .isInstanceOf(NotFoundException.class)
                 .hasMessage("User not found with id: 999");
 
+        verify(securityUtils).hasAccessToUser(999L);
         verify(userRepository, never()).deleteById(any());
     }
 
@@ -287,6 +356,7 @@ class UserServiceTest {
         List<User> users = Arrays.asList(user);
         Page<User> userPage = new PageImpl<>(users, pageable, users.size());
 
+        when(securityUtils.isAdmin()).thenReturn(true);
         when(userRepository.findAll(pageable)).thenReturn(userPage);
         when(userMapper.toDTO(user)).thenReturn(userDTO);
 
@@ -295,6 +365,20 @@ class UserServiceTest {
         assertThat(testPage).isNotNull();
         assertThat(testPage.getTotalElements()).isEqualTo(1);
         assertThat(testPage.getContent().get(0)).isEqualTo(userDTO);
+        verify(securityUtils).isAdmin();
         verify(userRepository).findAll(pageable);
+    }
+
+    @Test
+    void getAllUsersWhenNotAdminExpectThrowAccessDeniedException() {
+        Pageable pageable = PageRequest.of(0, 10);
+
+        when(securityUtils.isAdmin()).thenReturn(false);
+
+        assertThatThrownBy(() -> userService.getAllUsers(pageable))
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessage("Only admins can view all users");
+
+        verify(userRepository, never()).findAll(any(Pageable.class));
     }
 }

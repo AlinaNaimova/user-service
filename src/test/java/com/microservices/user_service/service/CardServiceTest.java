@@ -8,6 +8,10 @@ import com.microservices.user_service.model.Card;
 import com.microservices.user_service.model.User;
 import com.microservices.user_service.repository.CardRepository;
 import com.microservices.user_service.repository.UserRepository;
+import com.microservices.user_service.util.SecurityUtils;
+import com.microservices.user_service.util.TestSecurityUtils;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -17,6 +21,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.AccessDeniedException;
 
 import java.util.Arrays;
 import java.util.List;
@@ -26,9 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class CardServiceTest {
@@ -42,8 +45,21 @@ class CardServiceTest {
     @Mock
     private CardMapper cardMapper;
 
+    @Mock
+    private SecurityUtils securityUtils;
+
     @InjectMocks
     private CardService cardService;
+
+    @BeforeEach
+    void setUp() {
+        TestSecurityUtils.mockAdminUser();
+    }
+
+    @AfterEach
+    void tearDown() {
+        TestSecurityUtils.clearAuthentication();
+    }
 
     private User createUser(Long id, String name, String email) {
         User user = new User();
@@ -75,6 +91,7 @@ class CardServiceTest {
         Card savedCard = createCard(2L, "1111222233334444", "MOLLY BING", "06/26", user);
         CardDTO expectedDTO = createCardDTO(2L, 1L, "1111222233334444", "MOLLY BING", "06/26");
 
+        when(securityUtils.hasAccessToUser(1L)).thenReturn(true);
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(cardRepository.findByNumberNative("1111222233334444")).thenReturn(Optional.empty());
         when(cardMapper.toEntity(inputDTO)).thenReturn(newCard);
@@ -84,6 +101,7 @@ class CardServiceTest {
         CardDTO result = cardService.createCard(inputDTO);
 
         assertThat(result).isEqualTo(expectedDTO);
+        verify(securityUtils).hasAccessToUser(1L);
         verify(userRepository).findById(1L);
         verify(cardRepository).findByNumberNative("1111222233334444");
         verify(cardRepository).save(newCard);
@@ -91,14 +109,31 @@ class CardServiceTest {
     }
 
     @Test
+    void createCardWhenNoAccessExpectThrowAccessDeniedException() {
+        CardDTO inputDTO = createCardDTO(null, 2L, "1111222233334444", "MOLLY BING", "06/26");
+
+        when(securityUtils.hasAccessToUser(2L)).thenReturn(false);
+
+        assertThatThrownBy(() -> cardService.createCard(inputDTO))
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessage("You can only create cards for yourself");
+
+        verify(userRepository, never()).findById(any());
+        verify(cardRepository, never()).save(any());
+    }
+
+    @Test
     void createCardWhenUserNotExistsExpectThrowNotFoundException() {
         CardDTO inputDTO = createCardDTO(null, 200L, "1111222233334444", "Holder", "12/25");
+
+        when(securityUtils.hasAccessToUser(200L)).thenReturn(true);
         when(userRepository.findById(200L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> cardService.createCard(inputDTO))
                 .isInstanceOf(NotFoundException.class)
                 .hasMessage("User not found with id: 200");
 
+        verify(securityUtils).hasAccessToUser(200L);
         verify(cardRepository, never()).findByNumberNative(anyString());
         verify(cardRepository, never()).save(any());
     }
@@ -109,6 +144,7 @@ class CardServiceTest {
         Card existingCard = createCard(1L, "1234567812345678", "KIRA CHANG", "12/25", user);
         CardDTO inputDTO = createCardDTO(null, 1L, "1234567812345678", "NEW HOLDER", "12/26");
 
+        when(securityUtils.hasAccessToUser(1L)).thenReturn(true);
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
         when(cardRepository.findByNumberNative("1234567812345678")).thenReturn(Optional.of(existingCard));
 
@@ -116,6 +152,7 @@ class CardServiceTest {
                 .isInstanceOf(DuplicateResourceException.class)
                 .hasMessage("Card already exists with number: 1234567812345678");
 
+        verify(securityUtils).hasAccessToUser(1L);
         verify(cardMapper, never()).toEntity(any());
         verify(cardRepository, never()).save(any());
     }
@@ -126,19 +163,36 @@ class CardServiceTest {
         Card card = createCard(1L, "1234567812345678", "KIRA CHANG", "12/25", user);
         CardDTO expectedDTO = createCardDTO(1L, 1L, "1234567812345678", "KIRA CHANG", "12/25");
 
-        when(cardRepository.findById(1L)).thenReturn(Optional.of(card));
+        when(cardRepository.findByIdWithUser(1L)).thenReturn(Optional.of(card));
+        when(securityUtils.hasAccessToUser(1L)).thenReturn(true);
         when(cardMapper.toDTO(card)).thenReturn(expectedDTO);
 
         CardDTO result = cardService.getCardById(1L);
 
         assertThat(result).isEqualTo(expectedDTO);
-        verify(cardRepository).findById(1L);
+        verify(cardRepository).findByIdWithUser(1L);
+        verify(securityUtils).hasAccessToUser(1L);
         verify(cardMapper).toDTO(card);
     }
 
     @Test
+    void getCardByIdWhenNoAccessExpectThrowAccessDeniedException() {
+        User otherUser = createUser(2L, "Other", "other@example.com");
+        Card card = createCard(1L, "1234567812345678", "OTHER USER", "12/25", otherUser);
+
+        when(cardRepository.findByIdWithUser(1L)).thenReturn(Optional.of(card));
+        when(securityUtils.hasAccessToUser(2L)).thenReturn(false);
+
+        assertThatThrownBy(() -> cardService.getCardById(1L))
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessage("Access denied to this card");
+
+        verify(cardMapper, never()).toDTO(any());
+    }
+
+    @Test
     void getCardByIdWhenCardNotExistsExpectThrowNotFoundException() {
-        when(cardRepository.findById(333L)).thenReturn(Optional.empty());
+        when(cardRepository.findByIdWithUser(333L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> cardService.getCardById(333L))
                 .isInstanceOf(NotFoundException.class)
@@ -148,38 +202,101 @@ class CardServiceTest {
     }
 
     @Test
-    void getAllCardsExpectReturnPageOfCardDTO() {
-        User user = createUser(1L, "Kira", "kira@example.com");
-        Card card = createCard(1L, "1234567812345678", "KIRA CHANG", "12/25", user);
-        CardDTO cardDTO = createCardDTO(1L, 1L, "1234567812345678", "KIRA CHANG", "12/25");
+    void getMyCardsShouldReturnUserCards() {
+        User currentUser = createUser(1L, "Kira", "kira@example.com");
+        Card card1 = createCard(1L, "1111222233334444", "KIRA CHANG", "12/25", currentUser);
+        Card card2 = createCard(2L, "5555666677778888", "KIRA CHANG", "12/26", currentUser);
+        CardDTO cardDTO1 = createCardDTO(1L, 1L, "1111222233334444", "KIRA CHANG", "12/25");
+        CardDTO cardDTO2 = createCardDTO(2L, 1L, "5555666677778888", "KIRA CHANG", "12/26");
 
         Pageable pageable = PageRequest.of(0, 10);
-        List<Card> cards = Arrays.asList(card);
+        List<Card> cards = Arrays.asList(card1, card2);
         Page<Card> cardPage = new PageImpl<>(cards, pageable, cards.size());
 
+        when(securityUtils.getCurrentUser()).thenReturn(currentUser);
+        when(cardRepository.findByUserId(1L, pageable)).thenReturn(cardPage);
+        when(cardMapper.toDTO(card1)).thenReturn(cardDTO1);
+        when(cardMapper.toDTO(card2)).thenReturn(cardDTO2);
+
+        Page<CardDTO> result = cardService.getMyCards(pageable);
+
+        assertThat(result.getTotalElements()).isEqualTo(2);
+        assertThat(result.getContent()).containsExactly(cardDTO1, cardDTO2);
+        verify(securityUtils).getCurrentUser();
+        verify(cardRepository).findByUserId(1L, pageable);
+    }
+
+    @Test
+    void getAllCardsWhenAdminExpectReturnAllCards() {
+        User user1 = createUser(1L, "Kira", "kira@example.com");
+        User user2 = createUser(2L, "Molly", "molly@example.com");
+        Card card1 = createCard(1L, "1111222233334444", "KIRA", "12/25", user1);
+        Card card2 = createCard(2L, "5555666677778888", "MOLLY", "12/26", user2);
+        CardDTO cardDTO1 = createCardDTO(1L, 1L, "1111222233334444", "KIRA", "12/25");
+        CardDTO cardDTO2 = createCardDTO(2L, 2L, "5555666677778888", "MOLLY", "12/26");
+
+        Pageable pageable = PageRequest.of(0, 10);
+        List<Card> cards = Arrays.asList(card1, card2);
+        Page<Card> cardPage = new PageImpl<>(cards, pageable, cards.size());
+
+        when(securityUtils.isAdmin()).thenReturn(true);
         when(cardRepository.findAll(pageable)).thenReturn(cardPage);
-        when(cardMapper.toDTO(card)).thenReturn(cardDTO);
+        when(cardMapper.toDTO(card1)).thenReturn(cardDTO1);
+        when(cardMapper.toDTO(card2)).thenReturn(cardDTO2);
 
-        Page<CardDTO> resultPage = cardService.getAllCards(pageable);
+        Page<CardDTO> result = cardService.getAllCards(pageable);
 
-        assertThat(resultPage.getTotalElements()).isEqualTo(1);
-        assertThat(resultPage.getContent().get(0)).isEqualTo(cardDTO);
+        assertThat(result.getTotalElements()).isEqualTo(2);
+        assertThat(result.getContent()).containsExactly(cardDTO1, cardDTO2);
+        verify(securityUtils).isAdmin();
         verify(cardRepository).findAll(pageable);
     }
 
     @Test
+    void getAllCardsWhenNotAdminExpectThrowAccessDeniedException() {
+        Pageable pageable = PageRequest.of(0, 10);
+
+        when(securityUtils.isAdmin()).thenReturn(false);
+
+        assertThatThrownBy(() -> cardService.getAllCards(pageable))
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessage("Admin access required");
+
+        verify(cardRepository, never()).findAll(any(Pageable.class));    }
+
+    @Test
     void deleteCardWhenCardExistsExpectDeleteCard() {
-        when(cardRepository.existsById(1L)).thenReturn(true);
+        User user = createUser(1L, "Kira", "kira@example.com");
+        Card card = createCard(1L, "1234567812345678", "KIRA CHANG", "12/25", user);
+
+        when(cardRepository.findByIdWithUser(1L)).thenReturn(Optional.of(card));
+        when(securityUtils.hasAccessToUser(1L)).thenReturn(true);
 
         cardService.deleteCard(1L);
 
-        verify(cardRepository).existsById(1L);
+        verify(cardRepository).findByIdWithUser(1L);
+        verify(securityUtils).hasAccessToUser(1L);
         verify(cardRepository).deleteById(1L);
     }
 
     @Test
+    void deleteCardWhenNoAccessExpectThrowAccessDeniedException() {
+        User otherUser = createUser(2L, "Other", "other@example.com");
+        Card card = createCard(1L, "1234567812345678", "OTHER USER", "12/25", otherUser);
+
+        when(cardRepository.findByIdWithUser(1L)).thenReturn(Optional.of(card));
+        when(securityUtils.hasAccessToUser(2L)).thenReturn(false);
+
+        assertThatThrownBy(() -> cardService.deleteCard(1L))
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessage("You can only delete your own cards");
+
+        verify(cardRepository, never()).deleteById(any());
+    }
+
+    @Test
     void deleteCardWhenCardNotExistsExpectThrowNotFoundException() {
-        when(cardRepository.existsById(444L)).thenReturn(false);
+        when(cardRepository.findByIdWithUser(444L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> cardService.deleteCard(444L))
                 .isInstanceOf(NotFoundException.class)

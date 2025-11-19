@@ -8,6 +8,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 
@@ -29,7 +30,14 @@ public class CardController {
         return ResponseEntity.ok(card);
     }
 
+    @GetMapping("/my")
+    public ResponseEntity<Page<CardDTO>> getMyCards(Pageable pageable) {
+        Page<CardDTO> cards = cardService.getMyCards(pageable);
+        return ResponseEntity.ok(cards);
+    }
+
     @GetMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Page<CardDTO>> getAllCards(Pageable pageable) {
         Page<CardDTO> cards = cardService.getAllCards(pageable);
         return ResponseEntity.ok(cards);

@@ -5,7 +5,6 @@ import com.microservices.user_service.model.Card;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingConstants;
-import org.mapstruct.MappingTarget;
 
 import java.util.List;
 
@@ -18,10 +17,5 @@ public interface CardMapper {
     @Mapping(target = "user", ignore = true)
     Card toEntity(CardDTO cardDTO);
 
-    @Mapping(target = "id", ignore = true)
-    @Mapping(target = "user", ignore = true)
-    void updateEntityFromDto(CardDTO cardDTO, @MappingTarget Card card);
-
     List<CardDTO> toDTOList(List<Card> cards);
-    List<Card> toEntityList(List<CardDTO> cardDTOs);
 }

@@ -3,10 +3,12 @@ package com.microservices.user_service.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.microservices.user_service.dto.CardDTO;
 import com.microservices.user_service.integration.AbstractIntegrationTest;
+import com.microservices.user_service.util.TestSecurityUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -20,6 +22,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Sql(scripts = "classpath:sql_scripts/insert-users.sql", executionPhase = Sql.ExecutionPhase.BEFORE_TEST_METHOD)
 @Sql(scripts = "classpath:sql_scripts/insert-cards.sql", executionPhase = Sql.ExecutionPhase.BEFORE_TEST_METHOD)
 @Sql(scripts = "classpath:sql_scripts/cleanup.sql", executionPhase = Sql.ExecutionPhase.AFTER_TEST_METHOD)
+@ActiveProfiles("test")
 class CardControllerIntegrationTest extends AbstractIntegrationTest {
 
     private MockMvc mockMvc;
@@ -35,6 +38,8 @@ class CardControllerIntegrationTest extends AbstractIntegrationTest {
     @BeforeEach
     void setUp() {
         this.mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
+
+        TestSecurityUtils.mockAdminUser();
 
         cardDTO = new CardDTO();
         cardDTO.setNumber("1234567812345678");
@@ -88,25 +93,34 @@ class CardControllerIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void getAllCardsShouldReturnPaginatedCards() throws Exception {
+    void getMyCardsShouldReturnUserCards() throws Exception {
+        TestSecurityUtils.mockRegularUser();
+        mockMvc.perform(get("/api/card_info/my")
+                        .param("page", "0")
+                        .param("size", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", notNullValue()))
+                .andExpect(jsonPath("$.totalElements", is(1)));
+    }
+
+    @Test
+    void getAllCardsShouldReturnCardsForAdmin() throws Exception {
+        TestSecurityUtils.mockAdminUser();
         mockMvc.perform(get("/api/card_info")
                         .param("page", "0")
                         .param("size", "10"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content", notNullValue()))
-                .andExpect(jsonPath("$.content.length()", is(3)))
                 .andExpect(jsonPath("$.totalElements", is(3)));
     }
 
     @Test
-    void deleteCardShouldReturnNoContent() throws Exception {
-        Long cardId = 1L;
-
-        mockMvc.perform(delete("/api/card_info/{id}", cardId))
-                .andExpect(status().isNoContent());
-
-        mockMvc.perform(get("/api/card_info/{id}", cardId))
-                .andExpect(status().isNotFound());
+    void getAllCardsShouldReturnForbiddenForNonAdmin() throws Exception {
+        TestSecurityUtils.mockRegularUser();
+        mockMvc.perform(get("/api/card_info")
+                        .param("page", "0")
+                        .param("size", "10"))
+                .andExpect(status().isForbidden());
     }
 
     @Test

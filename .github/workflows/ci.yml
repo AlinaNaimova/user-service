@@ -23,6 +23,7 @@ jobs:
         ports:
           - 5432:5432
         options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+
       redis:
         image: redis:7-alpine
         ports:
@@ -40,6 +41,25 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
+
+      - name: Start Keycloak
+        run: |
+          docker run -d \
+            --name keycloak \
+            -p 8080:8080 \
+            -e KEYCLOAK_ADMIN=admin \
+            -e KEYCLOAK_ADMIN_PASSWORD=admin \
+            quay.io/keycloak/keycloak:23.0.7 start-dev --http-enabled=true
+          
+          echo "Waiting for Keycloak to start..."
+          for i in {1..30}; do
+            if curl -s http://localhost:8080/realms/master > /dev/null 2>&1; then
+              echo "Keycloak is ready!"
+              break
+            fi
+            echo "Waiting for Keycloak... attempt $i"
+            sleep 10
+          done
 
       - name: Cache SonarQube packages
         uses: actions/cache@v4
@@ -62,6 +82,7 @@ jobs:
           SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/userdb
           SPRING_DATASOURCE_USERNAME: user
           SPRING_DATASOURCE_PASSWORD: password
+          SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: http://localhost:8080/realms/app-realm
         run: mvn -B clean verify
 
       - name: SonarCloud Code Analysis
@@ -69,6 +90,12 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
           mvn -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Dsonar.projectKey=AlinaNaimova_user-service
+
+      - name: Stop Keycloak
+        if: always()
+        run: |
+          docker stop keycloak || true
+          docker rm keycloak || true
 
   build-docker:
     runs-on: ubuntu-latest
