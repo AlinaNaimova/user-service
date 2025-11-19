@@ -23,6 +23,7 @@ jobs:
         ports:
           - 5432:5432
         options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+
       redis:
         image: redis:7-alpine
         ports:
@@ -34,10 +35,17 @@ jobs:
         env:
           KEYCLOAK_ADMIN: admin
           KEYCLOAK_ADMIN_PASSWORD: admin
-          KC_HTTP_ENABLED: true
+          KC_HEALTH_ENABLED: true
+          KC_METRICS_ENABLED: false
         ports:
           - 8080:8080
-        options: --health-cmd="curl -f http://localhost:8080/realms/master || exit 1" --health-interval 20s --health-timeout 10s --health-retries 15 --health-start-period 60s
+        options: >-
+          --health-cmd="curl -f http://localhost:8080/health/ready || exit 1"
+          --health-interval 20s
+          --health-timeout 10s
+          --health-retries 15
+          --health-start-period 60s
+        command: ["start-dev", "--http-enabled=true"]
 
     steps:
       - name: Checkout code
@@ -50,6 +58,12 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
+
+      - name: Wait for Keycloak to be ready
+        run: |
+          echo "Waiting for Keycloak to start..."
+          timeout 300 bash -c 'until curl -f http://localhost:8080/health/ready > /dev/null 2>&1; do echo "Waiting..."; sleep 10; done'
+          echo "Keycloak is ready!"
 
       - name: Cache SonarQube packages
         uses: actions/cache@v4
